@@ -1,0 +1,161 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  PLAYER
+  OWNER
+  ADMIN
+}
+
+enum FieldType {
+  SYNTHETIC
+  BEACH_VOLLEYBALL
+}
+
+enum FieldStatus {
+  PENDING
+  ACTIVE
+  INACTIVE
+}
+
+enum BookingStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum PaymentMethod {
+  ONLINE
+  ON_SITE
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  REFUNDED
+  FAILED
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String?
+  fullName      String
+  phone         String?
+  avatarUrl     String?
+  role          Role      @default(PLAYER)
+  emailVerified Boolean   @default(false)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+
+  fields    Field[]
+  bookings  Booking[]
+  reviews   Review[]
+}
+
+model Field {
+  id                 String      @id @default(uuid())
+  ownerId            String
+  owner              User        @relation(fields: [ownerId], references: [id])
+  name               String
+  type               FieldType
+  address            String
+  description        String?
+  pricePerHour       Int
+  pricePerHourNight  Int?
+  slotDurationMin    Int         @default(60)
+  status             FieldStatus @default(PENDING)
+  createdAt          DateTime    @default(now())
+
+  photos       FieldPhoto[]
+  schedules    FieldSchedule[]
+  bookings     Booking[]
+  blockedSlots BlockedSlot[]
+  reviews      Review[]
+}
+
+model FieldPhoto {
+  id        String @id @default(uuid())
+  fieldId   String
+  field     Field  @relation(fields: [fieldId], references: [id])
+  url       String
+  sortOrder Int    @default(0)
+}
+
+model FieldSchedule {
+  id        String  @id @default(uuid())
+  fieldId   String
+  field     Field   @relation(fields: [fieldId], references: [id])
+  dayOfWeek Int
+  openTime  String
+  closeTime String
+  isOpen    Boolean @default(true)
+
+  @@unique([fieldId, dayOfWeek])
+}
+
+model Booking {
+  id            String        @id @default(uuid())
+  fieldId       String
+  field         Field         @relation(fields: [fieldId], references: [id])
+  userId        String
+  user          User          @relation(fields: [userId], references: [id])
+  bookingDate   DateTime      @db.Date
+  startTime     String
+  endTime       String
+  totalPrice    Int
+  status        BookingStatus @default(PENDING_PAYMENT)
+  paymentMethod PaymentMethod
+  expiresAt     DateTime?
+  createdAt     DateTime      @default(now())
+
+  payment Payment?
+  review  Review?
+
+  @@index([fieldId, bookingDate, startTime])
+}
+
+model Payment {
+  id              String        @id @default(uuid())
+  bookingId       String        @unique
+  booking         Booking       @relation(fields: [bookingId], references: [id])
+  gatewayRef      String?
+  gateway         String        @default("wompi")
+  amount          Int
+  status          PaymentStatus @default(PENDING)
+  gatewayResponse Json?
+  paidAt          DateTime?
+}
+
+model Review {
+  id         String   @id @default(uuid())
+  bookingId  String   @unique
+  booking    Booking  @relation(fields: [bookingId], references: [id])
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  fieldId    String
+  field      Field    @relation(fields: [fieldId], references: [id])
+  rating     Int
+  comment    String?
+  ownerReply String?
+  createdAt  DateTime @default(now())
+}
+
+model BlockedSlot {
+  id          String   @id @default(uuid())
+  fieldId     String
+  field       Field    @relation(fields: [fieldId], references: [id])
+  blockedDate DateTime @db.Date
+  startTime   String
+  endTime     String
+  reason      String?
+  createdAt   DateTime @default(now())
+}
